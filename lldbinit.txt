@@ -1,0 +1,3 @@
+command script import ../eigenlldb.py
+type synthetic add Eigen::VectorXd --python-class eigenlldb.EigenMatrixChildProvider
+type synthetic add -x Eigen::Matrix<.*> --python-class eigenlldb.EigenMatrixChildProvider
