@@ -1,62 +1,63 @@
 import lldb
 
 class EigenMatrixChildProvider:
-    valobj: lldb.SBValue = None
-    scalar_type: lldb.SBType = None
-    scalar_size: int = None
-    rows_compile_time: int = None
-    cols_compile_time: int = None
-    options: int = None
+    _valobj: lldb.SBValue = None
+    _scalar_type: lldb.SBType = None
+    _scalar_size: int = None
+    _rows_compile_time: int = None
+    _cols_compile_time: int = None
+    _row_major: bool = None
 
     def __init__(self, valobj, internal_dict):
-        self.valobj = valobj
-        storage = self.valobj.GetChildMemberWithName("m_storage")
+        self._valobj = valobj
+        storage = self._valobj.GetChildMemberWithName("m_storage")
         data = storage.GetChildMemberWithName("m_data")
-        self.scalar_type = data.GetType().GetPointeeType()
-        self.scalar_size = self.scalar_type.GetByteSize()
+        self._scalar_type = data.GetType().GetPointeeType()
+        self._scalar_size = self._scalar_type.GetByteSize()
 
-        name = self.valobj.GetType().GetCanonicalType().GetName()
+        name = self._valobj.GetType().GetCanonicalType().GetName()
         template_begin = name.find("<")
         template_end = name.find(">")
         template_args = name[(template_begin + 1):template_end].split(",")
-        self.rows_compile_time = int(template_args[1])
-        self.cols_compile_time = int(template_args[2])
-        self.options = int(template_args[3])
+        self._rows_compile_time = int(template_args[1])
+        self._cols_compile_time = int(template_args[2])
+        self._row_major = (int(template_args[3]) & 1) != 0
     def num_children(self):
         return self._cols() * self._rows()
     def get_child_index(self,name):
-        return None
         try:
-            return int(name.lstrip('[').rstrip(']'))
+            indices = name.lstrip("[").rstrip("]").split(",")
+            if self._row_major:
+                return int(indices[0]) * self._cols() + int(indices[1])
+            else:
+                return int(indices[1]) * self._rows() + int(indices[0])
         except:
             return -1
     def get_child_at_index(self,index):
-        storage = self.valobj.GetChildMemberWithName("m_storage")
+        storage = self._valobj.GetChildMemberWithName("m_storage")
         data = storage.GetChildMemberWithName("m_data")
-        offset = self.scalar_size * index
+        offset = self._scalar_size * index
 
-        if self._row_major():
+        if self._row_major:
             row = index // self._cols()
             col = index % self._cols()
         else:
             row = index % self._rows()
             col = index // self._rows()
         return data.CreateChildAtOffset(
-            '[' + str(row) + ',' + str(col) + ']', offset, self.scalar_type
+            '[' + str(row) + ',' + str(col) + ']', offset, self._scalar_type
         )
     def _cols(self):
-        if self.cols_compile_time == -1:
-            storage = self.valobj.GetChildMemberWithName("m_storage")
+        if self._cols_compile_time == -1:
+            storage = self._valobj.GetChildMemberWithName("m_storage")
             cols = storage.GetChildMemberWithName("m_cols")
             return cols.GetValueAsUnsigned()
         else:
-            return self.cols_compile_time
+            return self._cols_compile_time
     def _rows(self):
-        if self.rows_compile_time == -1:
-            storage = self.valobj.GetChildMemberWithName("m_storage")
+        if self._rows_compile_time == -1:
+            storage = self._valobj.GetChildMemberWithName("m_storage")
             rows = storage.GetChildMemberWithName("m_rows")
             return rows.GetValueAsUnsigned()
         else:
-            return self.rows_compile_time
-    def _row_major(self):
-        return (self.options & 1) != 0
+            return self._rows_compile_time
