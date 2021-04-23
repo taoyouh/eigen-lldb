@@ -7,21 +7,25 @@ class EigenMatrixChildProvider:
     _rows_compile_time: int = None
     _cols_compile_time: int = None
     _row_major: bool = None
+    _fixed_storage: bool = None
 
     def __init__(self, valobj, internal_dict):
         self._valobj = valobj
-        storage = self._valobj.GetChildMemberWithName("m_storage")
-        data = storage.GetChildMemberWithName("m_data")
-        self._scalar_type = data.GetType().GetPointeeType()
+        valtype = valobj.GetType().GetCanonicalType()
+        self._scalar_type = valtype.GetTemplateArgumentType(0)
         self._scalar_size = self._scalar_type.GetByteSize()
 
-        name = self._valobj.GetType().GetCanonicalType().GetName()
+        name = valtype.GetName()
         template_begin = name.find("<")
         template_end = name.find(">")
         template_args = name[(template_begin + 1):template_end].split(",")
         self._rows_compile_time = int(template_args[1])
         self._cols_compile_time = int(template_args[2])
         self._row_major = (int(template_args[3]) & 1) != 0
+        
+        max_rows = int(template_args[4])
+        max_cols = int(template_args[5])
+        self._fixed_storage = (max_rows != -1 and max_cols != -1)
     def num_children(self):
         return self._cols() * self._rows()
     def get_child_index(self,name):
@@ -44,6 +48,8 @@ class EigenMatrixChildProvider:
         else:
             row = index % self._rows()
             col = index // self._rows()
+        if self._fixed_storage:
+            data = data.GetChildMemberWithName("array")
         return data.CreateChildAtOffset(
             '[' + str(row) + ',' + str(col) + ']', offset, self._scalar_type
         )
