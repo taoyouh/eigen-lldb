@@ -74,31 +74,93 @@ class EigenMatrixChildProvider:
             return self._rows_compile_time
 
 class EigenSparseMatrixChildProvider:
-    _valobj: lldb.SBValue = None
-    _scalar_type: lldb.SBType = None
-    _scalar_size: int = None
+    _valobj: lldb.SBValue
+    _scalar_type: lldb.SBType
+    _scalar_size: int
     _index_type: lldb.SBType
-    _index_size: int = None
+    _index_size: int
+    _row_major: bool
 
-    _outer_size: int = None
-    _inner_size: int = None
-    _compressed: bool = None
-    _nnz_count: int = None
-    _values: lldb.SBValue = None
-    _inner_indices: lldb.SBValue = None
+    _outer_size: int
+    _nnz: int
+    _values: lldb.SBValue
+    _inner_indices: lldb.SBValue
+    _outer_starts: lldb.SBValue
+    _inner_nnzs: lldb.SBValue
+    _compressed: bool
+
     def __init__(self, valobj, internal_dict):
         self._valobj = valobj
         valtype = valobj.GetType().GetCanonicalType()
         self._scalar_type = valtype.GetTemplateArgumentType(0)
         self._scalar_size = self._scalar_type.GetByteSize()
+        self._index_type = valtype.GetTemplateArgumentType(2)
+        self._index_size = self._index_type.GetByteSize()
+
+        name = valtype.GetName()
+        template_begin = name.find("<")
+        template_end = name.find(">")
+        template_args = name[(template_begin + 1):template_end].split(",")
+        self._row_major = (int(template_args[1]) & 1) != 0
     def num_children(self):
-        pass
+        return self._nnz
     def get_child_index(self,name):
         pass
     def get_child_at_index(self,index):
-        if self._compressed:
-            if index < self._nnz_count:
-                inner_index = _inner_indices.CreateChildAtOffset("", self._index_size * index, _index_type).GetValueAsUnsigned()
-        pass
+        total_nnzs = 0
+        for outer_index in range(self._outer_size):
+            if self._compressed:
+                index_begin = self._outer_starts \
+                    .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
+                    .GetValueAsUnsigned()
+                index_end = self._outer_starts \
+                    .CreateChildAtOffset("", (outer_index + 1) * self._index_size, self._index_type) \
+                    .GetValueAsUnsigned()
+                nnzs = index_end - index_begin
+                if total_nnzs + nnzs > index:
+                    item_index = index - total_nnzs + index_begin
+                    inner_index = self._inner_indices \
+                        .CreateChildAtOffset("", item_index * self._index_size, self._index_type) \
+                        .GetValueAsUnsigned()
+                    return self._values \
+                        .CreateChildAtOffset(
+                            self._child_name(outer_index, inner_index),
+                            item_index * self._scalar_size,
+                            self._scalar_type)
+                else:
+                    total_nnzs = total_nnzs + nnzs
+            else:
+                nnzs = self._inner_nnzs \
+                    .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
+                    .GetValueAsUnsigned()
+                if total_nnzs + nnzs > index:
+                    item_index = index - total_nnzs + index_begin
+                    index_begin = self._outer_starts \
+                        .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
+                        .GetValueAsUnsigned()
+                    inner_index = self._inner_indices \
+                        .CreateChildAtOffset("", item_index * self._index_size, self._index_type) \
+                        .GetValueAsUnsigned()
+                    return self._values \
+                        .CreateChildAtOffset(
+                            self._child_name(outer_index, inner_index),
+                            item_index * self._scalar_size,
+                            self._scalar_type)
+                else:
+                    total_nnzs = total_nnzs + nnzs
     def update(self):
-        pass
+        valobj = self._valobj
+        self._outer_size = valobj.GetChildMemberWithName("m_outerSize").GetValueAsUnsigned()
+        data = valobj.GetChildMemberWithName("m_data")
+        self._values = data.GetChildMemberWithName("m_values")
+        self._inner_indices = data.GetChildMemberWithName("m_indices")
+        self._outer_starts = valobj.GetChildMemberWithName("m_outerIndex")
+        self._inner_nnzs = valobj.GetChildMemberWithName("m_innerNonZeros")
+
+        self._compressed = self._inner_nnzs.GetValueAsUnsigned() == 0
+        self._nnz = data.GetChildMemberWithName("m_size").GetValueAsUnsigned()
+    def _child_name(self, outer_index, inner_index):
+        if self._row_major:
+            return "[{0},{1}]".format(outer_index, inner_index)
+        else:
+            return "[{1},{0}]".format(outer_index, inner_index)

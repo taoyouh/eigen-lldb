@@ -2,6 +2,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
+#include <vector>
 
 int main() {
     Eigen::VectorXd vector = Eigen::VectorXd::Ones(3, 1);
@@ -14,6 +15,17 @@ int main() {
     matrix_custom << 1, 2, 3, 4;
     std::cout << vector << std::endl;
 
-    Eigen::SparseMatrix<double> mat(10, 10);
-    std::cout << mat << std::endl;
+    Eigen::SparseMatrix<double> sparse_mat(2, 2);
+    std::vector<Eigen::Triplet<double>> triplets;
+    triplets.emplace_back(0, 0, 1);
+    triplets.emplace_back(0, 1, 2);
+    triplets.emplace_back(1, 1, 3);
+    sparse_mat.setFromTriplets(triplets.begin(), triplets.end());
+    std::cout << sparse_mat << std::endl;
+
+    Eigen::SparseMatrix<double> sparse_uncompressed(2, 2);
+    sparse_uncompressed.coeffRef(0, 0) = 1;
+    sparse_uncompressed.coeffRef(0, 1) = 2;
+    sparse_uncompressed.coeffRef(1, 1) = 3;
+    std::cout << sparse_uncompressed << std::endl;
 }
