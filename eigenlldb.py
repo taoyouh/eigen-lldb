@@ -77,13 +77,15 @@ class EigenSparseMatrixChildProvider:
     _valobj: lldb.SBValue = None
     _scalar_type: lldb.SBType = None
     _scalar_size: int = None
+    _index_type: lldb.SBType
+    _index_size: int = None
 
-    # The index in values of the first item in each outer line
-    _outer_value_starts: List[int] = []
-    # The index in children of the first item in each outer line
-    _outer_children_starts: List[int] = []
-    _outer_sizes: List[int] = None
-
+    _outer_size: int = None
+    _inner_size: int = None
+    _compressed: bool = None
+    _nnz_count: int = None
+    _values: lldb.SBValue = None
+    _inner_indices: lldb.SBValue = None
     def __init__(self, valobj, internal_dict):
         self._valobj = valobj
         valtype = valobj.GetType().GetCanonicalType()
@@ -94,7 +96,9 @@ class EigenSparseMatrixChildProvider:
     def get_child_index(self,name):
         pass
     def get_child_at_index(self,index):
-        for (outer_index, value_starts
+        if self._compressed:
+            if index < self._nnz_count:
+                inner_index = _inner_indices.CreateChildAtOffset("", self._index_size * index, _index_type).GetValueAsUnsigned()
         pass
     def update(self):
         pass
