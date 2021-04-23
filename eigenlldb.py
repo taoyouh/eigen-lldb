@@ -1,4 +1,9 @@
 import lldb
+from typing import List
+
+def __lldb_init_module(debugger, internal_dict):
+    debugger.HandleCommand("type synthetic add -x Eigen::Matrix<.*> --python-class eigenlldb.EigenMatrixChildProvider")
+    debugger.HandleCommand("type synthetic add -x Eigen::SparseMatrix<.*> --python-class eigenlldb.EigenSparseMatrixChildProvider")
 
 class EigenMatrixChildProvider:
     _valobj: lldb.SBValue = None
@@ -67,3 +72,29 @@ class EigenMatrixChildProvider:
             return rows.GetValueAsUnsigned()
         else:
             return self._rows_compile_time
+
+class EigenSparseMatrixChildProvider:
+    _valobj: lldb.SBValue = None
+    _scalar_type: lldb.SBType = None
+    _scalar_size: int = None
+
+    # The index in values of the first item in each outer line
+    _outer_value_starts: List[int] = []
+    # The index in children of the first item in each outer line
+    _outer_children_starts: List[int] = []
+    _outer_sizes: List[int] = None
+
+    def __init__(self, valobj, internal_dict):
+        self._valobj = valobj
+        valtype = valobj.GetType().GetCanonicalType()
+        self._scalar_type = valtype.GetTemplateArgumentType(0)
+        self._scalar_size = self._scalar_type.GetByteSize()
+    def num_children(self):
+        pass
+    def get_child_index(self,name):
+        pass
+    def get_child_at_index(self,index):
+        for (outer_index, value_starts
+        pass
+    def update(self):
+        pass
