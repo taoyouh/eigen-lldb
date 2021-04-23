@@ -134,10 +134,10 @@ class EigenSparseMatrixChildProvider:
                     .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
                     .GetValueAsUnsigned()
                 if total_nnzs + nnzs > index:
-                    item_index = index - total_nnzs + index_begin
                     index_begin = self._outer_starts \
                         .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
                         .GetValueAsUnsigned()
+                    item_index = index - total_nnzs + index_begin
                     inner_index = self._inner_indices \
                         .CreateChildAtOffset("", item_index * self._index_size, self._index_type) \
                         .GetValueAsUnsigned()
