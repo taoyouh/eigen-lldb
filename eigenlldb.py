@@ -1,5 +1,6 @@
 import lldb
 from typing import List
+import bisect
 
 def __lldb_init_module(debugger, internal_dict):
     debugger.HandleCommand("type synthetic add -x Eigen::Matrix<.*> --python-class eigenlldb.EigenMatrixChildProvider")
@@ -89,6 +90,9 @@ class EigenSparseMatrixChildProvider:
     _inner_nnzs: lldb.SBValue
     _compressed: bool
 
+    # Index of the first synthetic child under each outer index
+    _child_indices: List[int]
+
     def __init__(self, valobj, internal_dict):
         self._valobj = valobj
         valtype = valobj.GetType().GetCanonicalType()
@@ -107,47 +111,31 @@ class EigenSparseMatrixChildProvider:
     def get_child_index(self,name):
         pass
     def get_child_at_index(self,index):
-        total_nnzs = 0
-        for outer_index in range(self._outer_size):
-            if self._compressed:
-                index_begin = self._outer_starts \
-                    .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
-                    .GetValueAsUnsigned()
-                index_end = self._outer_starts \
-                    .CreateChildAtOffset("", (outer_index + 1) * self._index_size, self._index_type) \
-                    .GetValueAsUnsigned()
-                nnzs = index_end - index_begin
-                if total_nnzs + nnzs > index:
-                    item_index = index - total_nnzs + index_begin
-                    inner_index = self._inner_indices \
-                        .CreateChildAtOffset("", item_index * self._index_size, self._index_type) \
-                        .GetValueAsUnsigned()
-                    return self._values \
-                        .CreateChildAtOffset(
-                            self._child_name(outer_index, inner_index),
-                            item_index * self._scalar_size,
-                            self._scalar_type)
-                else:
-                    total_nnzs = total_nnzs + nnzs
-            else:
-                nnzs = self._inner_nnzs \
-                    .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
-                    .GetValueAsUnsigned()
-                if total_nnzs + nnzs > index:
-                    index_begin = self._outer_starts \
-                        .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
-                        .GetValueAsUnsigned()
-                    item_index = index - total_nnzs + index_begin
-                    inner_index = self._inner_indices \
-                        .CreateChildAtOffset("", item_index * self._index_size, self._index_type) \
-                        .GetValueAsUnsigned()
-                    return self._values \
-                        .CreateChildAtOffset(
-                            self._child_name(outer_index, inner_index),
-                            item_index * self._scalar_size,
-                            self._scalar_type)
-                else:
-                    total_nnzs = total_nnzs + nnzs
+        outer_index = bisect.bisect_right(self._child_indices, index) - 1
+        total_nnzs = self._child_indices[outer_index]
+        if self._compressed:
+            item_index = index
+            inner_index = self._inner_indices \
+                .CreateChildAtOffset("", item_index * self._index_size, self._index_type) \
+                .GetValueAsUnsigned()
+            return self._values \
+                .CreateChildAtOffset(
+                    self._child_name(outer_index, inner_index),
+                    item_index * self._scalar_size,
+                    self._scalar_type)
+        else:
+            index_begin = self._outer_starts \
+                .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
+                .GetValueAsUnsigned()
+            item_index = index - total_nnzs + index_begin
+            inner_index = self._inner_indices \
+                .CreateChildAtOffset("", item_index * self._index_size, self._index_type) \
+                .GetValueAsUnsigned()
+            return self._values \
+                .CreateChildAtOffset(
+                    self._child_name(outer_index, inner_index),
+                    item_index * self._scalar_size,
+                    self._scalar_type)
     def update(self):
         valobj = self._valobj
         self._outer_size = valobj.GetChildMemberWithName("m_outerSize").GetValueAsUnsigned()
@@ -158,7 +146,24 @@ class EigenSparseMatrixChildProvider:
         self._inner_nnzs = valobj.GetChildMemberWithName("m_innerNonZeros")
 
         self._compressed = self._inner_nnzs.GetValueAsUnsigned() == 0
-        self._nnz = data.GetChildMemberWithName("m_size").GetValueAsUnsigned()
+
+        total_nnzs = 0
+        child_indices = [0]
+        for outer_index in range(self._outer_size):
+            if self._compressed:
+                index_end = self._outer_starts \
+                    .CreateChildAtOffset("", (outer_index + 1) * self._index_size, self._index_type) \
+                    .GetValueAsUnsigned()
+                total_nnzs = index_end
+                child_indices.append(total_nnzs)
+            else:
+                nnzs = self._inner_nnzs \
+                    .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
+                    .GetValueAsUnsigned()
+                total_nnzs = total_nnzs + nnzs
+                child_indices.append(total_nnzs)
+        self._child_indices = child_indices
+        self._nnz = total_nnzs
     def _child_name(self, outer_index, inner_index):
         if self._row_major:
             return "[{0},{1}]".format(outer_index, inner_index)
