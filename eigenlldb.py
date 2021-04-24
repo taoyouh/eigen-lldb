@@ -18,7 +18,18 @@ class EigenMatrixChildProvider:
     def __init__(self, valobj, internal_dict):
         self._valobj = valobj
         valtype = valobj.GetType().GetCanonicalType()
-        self._scalar_type = valtype.GetTemplateArgumentType(0)
+
+        scalar_type = valtype.GetTemplateArgumentType(0)
+        if not scalar_type.IsValid():
+            # In the case that scalar_type is invalid on LLDB 9.0 on Windows with CLion
+            storage = valobj.GetChildMemberWithName("m_storage")
+            data = storage.GetChildMemberWithName("m_data")
+            data_type = data.GetType()
+            if data_type.IsPointerType():
+                scalar_type = data.GetType().GetPointeeType()
+            else:
+                scalar_type = data.GetChildMemberWithName("array").GetType().GetArrayElementType()
+        self._scalar_type = scalar_type
         self._scalar_size = self._scalar_type.GetByteSize()
 
         name = valtype.GetName()
@@ -96,10 +107,22 @@ class EigenSparseMatrixChildProvider:
     def __init__(self, valobj, internal_dict):
         self._valobj = valobj
         valtype = valobj.GetType().GetCanonicalType()
-        self._scalar_type = valtype.GetTemplateArgumentType(0)
-        self._scalar_size = self._scalar_type.GetByteSize()
-        self._index_type = valtype.GetTemplateArgumentType(2)
-        self._index_size = self._index_type.GetByteSize()
+        scalar_type = valtype.GetTemplateArgumentType(0)
+        if not scalar_type.IsValid():
+            # In the case that scalar_type is invalid on LLDB 9.0 on Windows with CLion
+            data = valobj.GetChildMemberWithName("m_data")
+            values = data.GetChildMemberWithName("m_values")
+            scalar_type = values.GetType().GetPointeeType()
+        self._scalar_type = scalar_type
+        self._scalar_size = scalar_type.GetByteSize()
+
+        index_type = valtype.GetTemplateArgumentType(2)
+        if not index_type.IsValid():
+            # In the case that scalar_type is invalid on LLDB 9.0 on Windows with CLion
+            outer_starts = valobj.GetChildMemberWithName("m_outerIndex")
+            index_type = outer_starts.GetType().GetPointeeType()
+        self._index_type = index_type
+        self._index_size = index_type.GetByteSize()
 
         name = valtype.GetName()
         template_begin = name.find("<")
