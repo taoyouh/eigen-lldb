@@ -2,9 +2,12 @@ import lldb
 from typing import List
 import bisect
 
+
 def __lldb_init_module(debugger, internal_dict):
     debugger.HandleCommand("type synthetic add -x Eigen::Matrix<.*> --python-class eigenlldb.EigenMatrixChildProvider")
-    debugger.HandleCommand("type synthetic add -x Eigen::SparseMatrix<.*> --python-class eigenlldb.EigenSparseMatrixChildProvider")
+    debugger.HandleCommand(
+        "type synthetic add -x Eigen::SparseMatrix<.*> --python-class eigenlldb.EigenSparseMatrixChildProvider")
+
 
 class EigenMatrixChildProvider:
     _valobj: lldb.SBValue = None
@@ -39,13 +42,15 @@ class EigenMatrixChildProvider:
         self._rows_compile_time = int(template_args[1])
         self._cols_compile_time = int(template_args[2])
         self._row_major = (int(template_args[3]) & 1) != 0
-        
+
         max_rows = int(template_args[4])
         max_cols = int(template_args[5])
         self._fixed_storage = (max_rows != -1 and max_cols != -1)
+
     def num_children(self):
         return self._cols() * self._rows()
-    def get_child_index(self,name):
+
+    def get_child_index(self, name):
         try:
             indices = name.lstrip("[").rstrip("]").split(",")
             if self._row_major:
@@ -54,7 +59,8 @@ class EigenMatrixChildProvider:
                 return int(indices[1]) * self._rows() + int(indices[0])
         except:
             return -1
-    def get_child_at_index(self,index):
+
+    def get_child_at_index(self, index):
         storage = self._valobj.GetChildMemberWithName("m_storage")
         data = storage.GetChildMemberWithName("m_data")
         offset = self._scalar_size * index
@@ -70,6 +76,7 @@ class EigenMatrixChildProvider:
         return data.CreateChildAtOffset(
             '[' + str(row) + ',' + str(col) + ']', offset, self._scalar_type
         )
+
     def _cols(self):
         if self._cols_compile_time == -1:
             storage = self._valobj.GetChildMemberWithName("m_storage")
@@ -77,6 +84,7 @@ class EigenMatrixChildProvider:
             return cols.GetValueAsUnsigned()
         else:
             return self._cols_compile_time
+
     def _rows(self):
         if self._rows_compile_time == -1:
             storage = self._valobj.GetChildMemberWithName("m_storage")
@@ -84,6 +92,7 @@ class EigenMatrixChildProvider:
             return rows.GetValueAsUnsigned()
         else:
             return self._rows_compile_time
+
 
 class EigenSparseMatrixChildProvider:
     _valobj: lldb.SBValue
@@ -129,11 +138,14 @@ class EigenSparseMatrixChildProvider:
         template_end = name.find(">")
         template_args = name[(template_begin + 1):template_end].split(",")
         self._row_major = (int(template_args[1]) & 1) != 0
+
     def num_children(self):
         return self._nnz
-    def get_child_index(self,name):
+
+    def get_child_index(self, name):
         pass
-    def get_child_at_index(self,index):
+
+    def get_child_at_index(self, index):
         outer_index = bisect.bisect_right(self._child_indices, index) - 1
         total_nnzs = self._child_indices[outer_index]
         if self._compressed:
@@ -143,9 +155,9 @@ class EigenSparseMatrixChildProvider:
                 .GetValueAsUnsigned()
             return self._values \
                 .CreateChildAtOffset(
-                    self._child_name(outer_index, inner_index),
-                    item_index * self._scalar_size,
-                    self._scalar_type)
+                self._child_name(outer_index, inner_index),
+                item_index * self._scalar_size,
+                self._scalar_type)
         else:
             index_begin = self._outer_starts \
                 .CreateChildAtOffset("", outer_index * self._index_size, self._index_type) \
@@ -156,9 +168,10 @@ class EigenSparseMatrixChildProvider:
                 .GetValueAsUnsigned()
             return self._values \
                 .CreateChildAtOffset(
-                    self._child_name(outer_index, inner_index),
-                    item_index * self._scalar_size,
-                    self._scalar_type)
+                self._child_name(outer_index, inner_index),
+                item_index * self._scalar_size,
+                self._scalar_type)
+
     def update(self):
         valobj = self._valobj
         self._outer_size = valobj.GetChildMemberWithName("m_outerSize").GetValueAsUnsigned()
@@ -187,6 +200,7 @@ class EigenSparseMatrixChildProvider:
                 child_indices.append(total_nnzs)
         self._child_indices = child_indices
         self._nnz = total_nnzs
+
     def _child_name(self, outer_index, inner_index):
         if self._row_major:
             return "[{0},{1}]".format(outer_index, inner_index)
