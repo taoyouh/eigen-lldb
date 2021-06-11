@@ -140,12 +140,22 @@ class EigenSparseMatrixChildProvider:
         self._row_major = (int(template_args[1]) & 1) != 0
 
     def num_children(self):
-        return self._nnz
+        return self._nnz + 2
 
     def get_child_index(self, name):
         pass
 
     def get_child_at_index(self, index):
+        if index == 0:
+            name = "rows" if self._row_major else "cols"
+            return self._valobj.GetChildMemberWithName("m_outerSize") \
+                .CreateChildAtOffset(name, 0, self._index_type)
+        elif index == 1:
+            name = "cols" if self._row_major else "rows"
+            return self._valobj.GetChildMemberWithName("m_innerSize") \
+                .CreateChildAtOffset(name, 0, self._index_type)
+        else:
+            index = index - 2
         outer_index = bisect.bisect_right(self._child_indices, index) - 1
         total_nnzs = self._child_indices[outer_index]
         if self._compressed:
