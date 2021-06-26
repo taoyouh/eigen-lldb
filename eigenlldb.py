@@ -1,3 +1,10 @@
+# Usage:
+# 1. Add the following line (change it according to the path to this file)
+#    to the file ~/.lldbinit (create one if it doesn't exist):
+#        `command script import /path/to/eigenlldb.py`
+# 2. Inspect the variables in LLDB command line
+#        `frame variable`
+
 import lldb
 from typing import List
 import bisect
