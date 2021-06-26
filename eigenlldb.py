@@ -51,14 +51,7 @@ class EigenMatrixChildProvider:
         return self._cols() * self._rows()
 
     def get_child_index(self, name):
-        try:
-            indices = name.lstrip("[").rstrip("]").split(",")
-            if self._row_major:
-                return int(indices[0]) * self._cols() + int(indices[1])
-            else:
-                return int(indices[1]) * self._rows() + int(indices[0])
-        except:
-            return -1
+        pass
 
     def get_child_at_index(self, index):
         storage = self._valobj.GetChildMemberWithName("m_storage")
@@ -73,8 +66,14 @@ class EigenMatrixChildProvider:
             col = index // self._rows()
         if self._fixed_storage:
             data = data.GetChildMemberWithName("array")
+        if self._cols() == 1:
+            name = '[{}]'.format(row)
+        elif self._rows() == 1:
+            name = '[{}]'.format(col)
+        else:
+            name = '[{},{}]'.format(row, col)
         return data.CreateChildAtOffset(
-            '[' + str(row) + ',' + str(col) + ']', offset, self._scalar_type
+            name, offset, self._scalar_type
         )
 
     def _cols(self):
