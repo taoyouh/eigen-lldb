@@ -17,13 +17,13 @@ def __lldb_init_module(debugger, internal_dict):
 
 
 class EigenMatrixChildProvider:
-    _valobj: lldb.SBValue = None
-    _scalar_type: lldb.SBType = None
-    _scalar_size: int = None
-    _rows_compile_time: int = None
-    _cols_compile_time: int = None
-    _row_major: bool = None
-    _fixed_storage: bool = None
+    _valobj: lldb.SBValue
+    _scalar_type: lldb.SBType
+    _scalar_size: int
+    _rows_compile_time: int
+    _cols_compile_time: int
+    _row_major: bool
+    _fixed_storage: bool
 
     def __init__(self, valobj, internal_dict):
         self._valobj = valobj
