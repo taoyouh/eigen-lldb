@@ -1,6 +1,9 @@
 # eigen-lldb
 This project is used to inspect Eigen Matrices in LLDB.
 
+## Notice
+This project is the original version of the lldb inspector in the Eigen [GitLab repo](https://gitlab.com/libeigen/eigen/-/blob/master/debug/lldb/eigenlldb.py). Any new updates should directly go to the Eigen repo.
+
 ## Usage
 1. download the file `eigenlldb.py`
 
